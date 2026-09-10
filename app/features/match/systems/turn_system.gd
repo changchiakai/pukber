@@ -58,6 +58,10 @@ func begin_hand(rotate: bool = true) -> void:
 	state.deck.shuffle_with(rng)
 	for player in state.players:
 		player.reset_hand()
+		if player.profile:
+			player.profile.reset_hand_plan()
+		if not player.eliminated:
+			player.hands_played += 1
 	var live := state.live_seats()
 	state.small_blind_seat = state.dealer if live.size() == 2 else next_live(state.dealer)
 	state.big_blind_seat = next_live(state.small_blind_seat)
@@ -69,7 +73,7 @@ func begin_hand(rotate: bool = true) -> void:
 		for _index in range(live.size()):
 			state.players[seat].hole.append(state.deck.draw())
 			seat = next_live(seat)
-	state.record("開始 · 莊家 %s · %d 副牌" % [state.players[state.dealer].display_name, state.settings.deck_count()])
+	state.record("開始 · 莊家 %s · 單副牌 52 張" % state.players[state.dealer].display_name)
 	event_occurred.emit("hand_started", {"hand": state.hand_number})
 	event_occurred.emit("cards_dealt", {})
 	progress(state.big_blind_seat)
@@ -81,8 +85,12 @@ func post_blind(seat: int, amount: int, title: String) -> void:
 	state.record(player.display_name + " " + player.last_action)
 
 func act(seat: int, action: String, amount: int = 0, speech: String = "") -> String:
+	if seat == 0:
+		_record_review_decision(action, amount)
 	var error := BettingSystem.apply(state, seat, action, amount)
 	if not error.is_empty():
+		if seat == 0:
+			state.review_decisions.pop_back()
 		return error
 	var player: PlayerState = state.players[seat]
 	player.bubble = speech
@@ -90,6 +98,18 @@ func act(seat: int, action: String, amount: int = 0, speech: String = "") -> Str
 	event_occurred.emit("player_acted", {"seat": seat, "action": action})
 	progress(seat)
 	return ""
+
+func _record_review_decision(action: String, amount: int) -> void:
+	var observation := AIObservationQuery.execute(state, 0)
+	state.review_decisions.append({
+		"hand": state.hand_number, "street": state.street,
+		"action": action, "raise_to": amount,
+		"hole": observation.hole, "board": observation.board,
+		"opponents": observation.opponents, "pot": observation.pot,
+		"chips": observation.chips, "bet": observation.bet,
+		"big_blind": observation.big_blind, "legal": observation.legal,
+		"player_count": observation.player_count, "in_position": observation.in_position
+	})
 
 func pending_seats() -> Array:
 	var pending: Array = []

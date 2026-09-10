@@ -33,6 +33,7 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 	if not options.active:
 		return "目前不是你的回合。"
 	var player: PlayerState = state.players[seat]
+	var faced_bet := int(options.call) > 0
 	if action == "all_in":
 		if not options.all_in:
 			return "不足額加注未重新開放加注權。"
@@ -44,12 +45,19 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 	match action:
 		"fold":
 			player.folded = true
+			if faced_bet:
+				player.fold_to_bet += 1
 			player.last_action = "棄牌"
 		"check":
 			if not options.check:
 				return "有待跟注金額，無法過牌。"
 			player.last_action = "過牌"
 		"call":
+			if int(options.call) > 0:
+				player.call_actions += 1
+				if state.street == 0 and not player.entered_pot_this_hand:
+					player.voluntary_puts += 1
+					player.entered_pot_this_hand = true
 			commit(player, options.call)
 			player.last_action = "跟注 %d" % options.call if options.call > 0 else "過牌"
 		"raise":
@@ -57,6 +65,7 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 				return "加注金額不合法。"
 			if raise_to < options.min_to and raise_to != options.max_to:
 				return "最小加注至 %d；不足時只能全下。" % options.min_to
+			var was_reraise := (state.current_bet > state.settings.big_blind) if state.street == 0 else state.current_bet > 0
 			var increment := raise_to - state.current_bet
 			if increment >= state.min_raise:
 				state.min_raise = increment
@@ -64,6 +73,11 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 			state.current_bet = raise_to
 			player.last_action = "加注至 %d" % raise_to
 			player.raises += 1
+			if state.street == 0 and not player.entered_pot_this_hand:
+				player.voluntary_puts += 1
+				player.entered_pot_this_hand = true
+			if was_reraise:
+				player.reraises += 1
 			player.aggressive_this_hand = true
 		_:
 			return "未知操作。"

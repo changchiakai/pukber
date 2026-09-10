@@ -10,12 +10,16 @@ const GREEN := Color("25745c")
 const UI_FONT: FontFile = preload("res://Iansui-Regular.ttf")
 
 static func install(root: Control) -> void:
+	var scale := ui_scale(root)
 	var theme := Theme.new()
 	# Embed the Chinese font in exported builds instead of relying on browser/OS fonts.
 	theme.default_font = UI_FONT
-	theme.default_font_size = 18
+	theme.default_font_size = scaled_font_size(root, 18)
 	theme.set_color("font_color", "Label", TEXT)
 	theme.set_color("font_color", "Button", TEXT)
+	theme.set_color("font_color", "OptionButton", TEXT)
+	theme.set_color("font_color", "SpinBox", TEXT)
+	theme.set_color("font_color", "LineEdit", TEXT)
 	theme.set_color("font_disabled_color", "Button", Color("83918c"))
 	theme.set_color("font_color", "RichTextLabel", TEXT)
 	theme.set_stylebox("normal", "Button", box(PANEL, Color("426058")))
@@ -23,6 +27,7 @@ static func install(root: Control) -> void:
 	theme.set_stylebox("pressed", "Button", box(GREEN, GOLD))
 	theme.set_stylebox("focus", "Button", box(Color(0, 0, 0, 0), GOLD, 3))
 	theme.set_stylebox("disabled", "Button", box(Color("142025"), Color("293835")))
+	theme.set_constant("h_separation", "HBoxContainer", int(round(10 * scale)))
 	root.theme = theme
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var backdrop := ColorRect.new()
@@ -55,7 +60,7 @@ static func label(parent: Node, text: String, rect: Rect2, font_size: int = 18, 
 	node.text = text
 	node.position = rect.position
 	node.size = rect.size
-	node.add_theme_font_size_override("font_size", font_size)
+	node.add_theme_font_size_override("font_size", scaled_font_size(parent, font_size))
 	node.add_theme_color_override("font_color", color)
 	parent.add_child(node)
 	return node
@@ -65,6 +70,7 @@ static func button(parent: Node, text: String, rect: Rect2, callback: Callable) 
 	node.text = text
 	node.position = rect.position
 	node.size = rect.size
+	node.add_theme_font_size_override("font_size", scaled_font_size(parent, 22))
 	node.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	node.pressed.connect(callback)
 	parent.add_child(node)
@@ -81,3 +87,26 @@ static func cards(parent: Node, values: Array, origin: Vector2, hidden_count: in
 			label(node, ["♠", "♥", "♦", "♣"][card.suit], Rect2(15 * scale_factor, 33 * scale_factor, 40, 35), int(29 * scale_factor), color)
 		else:
 			label(node, "▪\n▪", Rect2(17 * scale_factor, 9 * scale_factor, 28, 62), int(25 * scale_factor), GOLD)
+
+static func ui_scale(node: Node) -> float:
+	var control := find_control(node)
+	if control == null:
+		return 1.0
+	var viewport_size := control.get_viewport_rect().size
+	if viewport_size.x <= 900:
+		return 1.56
+	return 1.28
+
+static func compact_ui(node: Node) -> bool:
+	return ui_scale(node) > 1.0
+
+static func scaled_font_size(node: Node, font_size: int) -> int:
+	return int(round(font_size * ui_scale(node)))
+
+static func find_control(node: Node) -> Control:
+	var current := node
+	while current != null:
+		if current is Control:
+			return current as Control
+		current = current.get_parent()
+	return null

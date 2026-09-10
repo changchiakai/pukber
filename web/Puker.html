@@ -1,9 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-tw">
 	<head>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>讀心牌桌 · Puker</title>
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+		<title>德州練習桌</title>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="Puker.icon.png" />
+<link rel="apple-touch-icon" href="Puker.apple-touch-icon.png"/>
+<link rel="manifest" href="Puker.manifest.json">
+<meta name="theme-color" content="#091419"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Puker"><meta name="puker-version" content="v0.1.0.3">
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -11,15 +15,31 @@ html, body, #canvas {
 	border: 0;
 }
 
+html, body {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	overscroll-behavior: none;
+	background: #091419;
+}
+
 body {
 	color: white;
-	background-color: black;
-	overflow: hidden;
+	background:
+		radial-gradient(circle at top, rgba(37, 116, 92, 0.24), transparent 42%),
+		linear-gradient(180deg, #14272c 0%, #091419 72%);
 	touch-action: none;
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: var(--app-height, 100dvh);
+	font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
 }
 
 #canvas {
 	display: block;
+	width: 100vw;
+	height: var(--app-height, 100dvh);
 }
 
 #canvas:focus {
@@ -38,18 +58,25 @@ body {
 }
 
 #status {
-	background-color: #242424;
+	width: 100vw;
+	height: var(--app-height, 100dvh);
+	background:
+		radial-gradient(circle at top, rgba(37, 116, 92, 0.22), transparent 38%),
+		linear-gradient(180deg, #14272c 0%, var(--gd-splash-color, #091114) 70%);
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
+	gap: 1rem;
 	visibility: hidden;
+	z-index: 2;
 }
 
 #status-splash {
 	max-height: 100%;
 	max-width: 100%;
 	margin: auto;
+	z-index: 0;
 }
 
 #status-splash.show-image--false {
@@ -72,27 +99,52 @@ body {
 
 #status-progress {
 	bottom: 10%;
-	width: 50%;
+	width: min(420px, 50vw);
 	margin: 0 auto;
+	accent-color: #e6ba68;
+	z-index: 2;
 }
 
 #status-notice {
-	background-color: #5b3943;
+	position: relative;
+	max-width: min(720px, calc(100vw - 2rem));
+	background-color: #14272c;
 	border-radius: 0.5rem;
-	border: 1px solid #9b3943;
-	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+	border: 1px solid #365049;
+	color: #edf2e9;
 	line-height: 1.3;
 	margin: 0 2rem;
 	overflow: hidden;
 	padding: 1rem;
 	text-align: center;
-	z-index: 1;
+	z-index: 3;
+}
+
+#status.status--notice #status-splash {
+	opacity: 0.14;
+	filter: blur(2px);
+}
+
+#build-version {
+	position: fixed;
+	right: max(12px, env(safe-area-inset-right));
+	bottom: max(10px, env(safe-area-inset-bottom));
+	padding: 0.35rem 0.6rem;
+	border: 1px solid rgba(230, 186, 104, 0.45);
+	border-radius: 999px;
+	background: rgba(9, 20, 25, 0.76);
+	color: rgba(237, 242, 233, 0.9);
+	font: 600 12px/1 "Segoe UI", "Microsoft JhengHei", sans-serif;
+	letter-spacing: 0.04em;
+	pointer-events: none;
+	user-select: none;
+	z-index: 3;
+	backdrop-filter: blur(6px);
 }
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="Puker.icon.png" />
-<link rel="apple-touch-icon" href="Puker.apple-touch-icon.png"/>
-
+		<link rel="apple-touch-icon" href="Puker.apple-touch-icon.png"/>
+		<link rel="manifest" href="Puker.manifest.json">
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -103,22 +155,44 @@ body {
 			Your browser does not support JavaScript.
 		</noscript>
 
-		<div id="status">
+		<div id="status" style="--gd-splash-color: #091114;">
 			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="Puker.png" alt="">
 			<progress id="status-progress"></progress>
 			<div id="status-notice"></div>
 		</div>
+		<div id="build-version" hidden></div>
 
 		<script src="Puker.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"Puker","experimentalVK":false,"fileSizes":{"Puker.pck":6068776,"Puker.wasm":37896978},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"Puker","experimentalVK":false,"fileSizes":{"Puker.pck":17326832,"Puker.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"Puker.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
+	const versionMeta = document.querySelector('meta[name="puker-version"]');
+	const versionBadge = document.getElementById('build-version');
+
+	function syncViewportHeight() {
+		const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+		document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
+	}
+
+	if (versionMeta && versionMeta.content) {
+		versionBadge.textContent = versionMeta.content;
+		versionBadge.hidden = false;
+	}
+
+	syncViewportHeight();
+	window.addEventListener('resize', syncViewportHeight);
+	window.addEventListener('orientationchange', syncViewportHeight);
+	if (window.visualViewport) {
+		window.visualViewport.addEventListener('resize', syncViewportHeight);
+	}
+
 	const statusOverlay = document.getElementById('status');
 	const statusProgress = document.getElementById('status-progress');
 	const statusNotice = document.getElementById('status-notice');
+	let loadWatchdog = null;
 
 	let initializing = true;
 	let statusMode = '';
@@ -128,6 +202,10 @@ const engine = new Engine(GODOT_CONFIG);
 			return;
 		}
 		if (mode === 'hidden') {
+			if (loadWatchdog) {
+				window.clearTimeout(loadWatchdog);
+				loadWatchdog = null;
+			}
 			statusOverlay.remove();
 			initializing = false;
 			return;
@@ -174,7 +252,6 @@ const engine = new Engine(GODOT_CONFIG);
 			} catch (err) {
 				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
 			}
-			// There's a chance that installing the service worker would fix the issue
 			Promise.race([
 				serviceWorkerRegistrationPromise.then((registration) => {
 					if (registration != null) {
@@ -182,25 +259,25 @@ const engine = new Engine(GODOT_CONFIG);
 					}
 					return registration;
 				}).then(() => engine.installServiceWorker()),
-				// For some reason, `getRegistration()` can stall
 				new Promise((resolve) => {
 					setTimeout(() => resolve(), 2000);
 				}),
 			]).then(() => {
-				// Reload if there was no error.
 				window.location.reload();
 			}).catch((err) => {
 				console.error('Error while registering service worker:', err);
 			});
 		} else {
-			// Display the message as usual
 			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
 			displayFailureNotice(missingMsg + missing.join('\n'));
 		}
 	} else {
 		setStatusMode('progress');
+		loadWatchdog = window.setTimeout(() => {
+			displayFailureNotice('載入時間過長。\n若你剛更新過 Web 匯出，請重新整理一次。\n若仍卡住，請清除這個網站的 PWA / Service Worker 快取後再試。');
+		}, 15000);
 		engine.startGame({
-			'onProgress': function (current, total) {
+			onProgress: function (current, total) {
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
@@ -217,4 +294,3 @@ const engine = new Engine(GODOT_CONFIG);
 		</script>
 	</body>
 </html>
-

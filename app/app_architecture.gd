@@ -12,3 +12,6 @@ func show_menu() -> void:
 
 func show_result() -> void:
 	get_tree().change_scene_to_file("res://scenes/match_result.tscn")
+
+func show_review() -> void:
+	get_tree().change_scene_to_file("res://scenes/match_review.tscn")

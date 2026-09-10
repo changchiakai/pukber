@@ -3,7 +3,7 @@ extends RefCounted
 
 var cards: Array = []
 
-func _init(copies: int = 4) -> void:
+func _init(copies: int = 1) -> void:
 	for copy in range(copies):
 		for suit in range(4):
 			for rank in range(2, 15):

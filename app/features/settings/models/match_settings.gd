@@ -11,4 +11,4 @@ var show_practice_equity: bool = false
 var simulation_samples: int = 48
 
 func deck_count() -> int:
-	return (ai_count + 1) * 2
+	return 1

@@ -19,6 +19,9 @@ var hand_over: bool = false
 var finished: bool = false
 var champion: int = -1
 var history: Array[String] = []
+# Snapshots are kept separately from the display history so post-match review
+# has the exact pot, legal actions and board at each human decision.
+var review_decisions: Array[Dictionary] = []
 var summary: String = ""
 var awards: Array = []
 

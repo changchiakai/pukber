@@ -44,6 +44,7 @@ func run() -> void:
 	var menu := current_scene
 	menu.count.select(3)
 	menu.attitude.select(1)
+	menu.chips.select(2)
 	await click_button(menu.find_child("StartGame", true, false))
 	await frames(10)
 	check(current_scene.name == "PokerTable", "menu to table")
@@ -52,6 +53,21 @@ func run() -> void:
 		return
 	check(app.match_system.state.players.size() == 5, "selected four AI")
 	check(app.match_system.state.settings.liars_majority == false, "selected honest majority")
+	check(app.match_system.state.settings.initial_chips == 100000, "selected 100000 chips")
+	for player in app.match_system.state.players:
+		check(player.chips + player.contribution == 100000, "opening stack uses selected chips")
+	app.show_menu()
+	await frames(10)
+	menu = current_scene
+	menu.count.select(3)
+	menu.attitude.select(1)
+	menu.chips.select(0)
+	await click_button(menu.find_child("StartGame", true, false))
+	await frames(10)
+	check(current_scene.name == "PokerTable", "menu to table for full smoke")
+	if app.match_system == null:
+		quit(1)
+		return
 	# Wait only for actual AI timers; human must remain the decision-maker.
 	Engine.time_scale = 15.0
 	var waited := 0

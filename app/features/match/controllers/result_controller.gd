@@ -28,5 +28,6 @@ func _ready() -> void:
 	if state.champion < 0:
 		note = "真人出局後本場停止；存活 AI 尚未分出冠軍。已淘汰名次保留。\n" + note
 	PokerUI.label(self, note, Rect2(95, 692, 1248, 62), 17, PokerUI.MUTED)
+	PokerUI.button(self, "AI 復盤：3 個關鍵決策", Rect2(94, 795, 450, 60), App.show_review).name = "OpenReview"
 	PokerUI.button(self, "重新開始", Rect2(730, 795, 300, 60), App.start_match).name = "Restart"
 	PokerUI.button(self, "回主選單", Rect2(1050, 795, 292, 60), App.show_menu).name = "BackToMenu"
