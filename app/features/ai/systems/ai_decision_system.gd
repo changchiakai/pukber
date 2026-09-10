@@ -560,6 +560,23 @@ static func facing_pressure(observation: Dictionary) -> float:
 			read = minf(read, float(model.get("pressure_read", 0.0)))
 	return read
 
+# A single unusually large raise is public information too.  It should not make
+# the AI call blindly, but it must prevent a player from printing chips by using
+# the same extreme sizing before a long-term tendency model has enough hands.
+static func immediate_overbet_read(observation: Dictionary) -> float:
+	var own_bet := int(observation.get("bet", 0))
+	var largest_wager := own_bet
+	for opponent in observation.opponents:
+		largest_wager = maxi(largest_wager, int(opponent.get("bet", 0)))
+	var extra_wager := largest_wager - own_bet
+	if extra_wager <= 0:
+		return 0.0
+	# `pot` includes the current wager.  Compare against the pot before that
+	# wager so a 10BB open into the blinds is recognised, while normal opens are not.
+	var prior_pot := maxf(float(observation.get("big_blind", 1)), float(observation.get("pot", 0)) - extra_wager)
+	var ratio := float(extra_wager) / prior_pot
+	return clampf((ratio - 2.0) / 5.0, 0.0, 0.55)
+
 static func speculative_start(hole: Array) -> bool:
 	var high := maxi(int(hole[0].rank), int(hole[1].rank))
 	var low := mini(int(hole[0].rank), int(hole[1].rank))
@@ -588,7 +605,7 @@ static func choose(observation: Dictionary, profile: AIProfile, equity: float) -
 	var spr := float(maxi(0, effective - cost)) / (pot + cost)
 	var odds := float(cost) / (pot + cost)
 	var in_position := bool(observation.get("in_position", false))
-	var pressure_read := facing_pressure(observation)
+	var pressure_read := maxf(facing_pressure(observation), immediate_overbet_read(observation))
 	var margin := 0.025 + 0.015 * float(maxi(0, opponents.size() - 1))
 	margin += 0.015 if street < 3 and not in_position else 0.0
 	# Adapt uncertainty padding, never fabricate equity or ignore the actual price.
@@ -660,6 +677,10 @@ static func choose(observation: Dictionary, profile: AIProfile, equity: float) -
 			var expensive := cost > bb * 4 or cost > effective * 0.15
 			if expensive:
 				call_entry += lerpf(0.08, 0.02, pressure_read)
+				# Do not widen a multiway range.  In heads-up pots, a clear 10BB+
+				# overbet can contain enough weak hands that borderline defenders stay in.
+				if heads_up:
+					call_entry -= pressure_read * 0.14
 			call_entry -= pressure_read * 0.05
 			var defend := quality >= call_entry and strength >= odds + margin
 			# Existing callers improve the price; do not add a second player-count penalty.
@@ -768,9 +789,14 @@ static func range_weight(hole: Array, board: Array, opponent: Dictionary, observ
 	var quality := preflop_quality(hole)
 	var weight := clampf(0.5 + quality - (1.0 - vpip) * 0.5, 0.15, 1.0)
 	var raised := bool(opponent.get("aggressive", false))
-	var pressure_read := clampf(float(model.get("pressure_read", 0.0)), 0.0, 1.0)
+	var pressure_read := maxf(
+		clampf(float(model.get("pressure_read", 0.0)), 0.0, 1.0),
+		immediate_overbet_read(observation)
+	)
 	weight = lerpf(weight, 1.0, pressure_read * 0.55)
 	if raised:
+		# A normal raise still narrows a range.  An isolated 10BB+ overbet,
+		# however, retains more weak/bluff candidates until showdown proves otherwise.
 		var weak_raise_weight := lerpf(0.50, 0.95, pressure_read)
 		weight *= 1.0 if quality >= 0.72 else weak_raise_weight
 	if board.size() >= 3 and bool(opponent.get("street_aggressive", raised)):

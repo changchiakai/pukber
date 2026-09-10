@@ -15,7 +15,7 @@ func _ready() -> void:
 	PokerUI.label(self, "牌會說話，人不一定。", Rect2(92, 310, 630, 52), 30, PokerUI.MUTED)
 	PokerUI.cards(self, [PokerCard.new(14, 0), PokerCard.new(14, 1), PokerCard.new(14, 2), PokerCard.new(14, 3), PokerCard.new(13, 0)], Vector2(95, 393), 0, 1.45)
 	PokerUI.label(self, "單副牌 · 標準德州撲克 · 觀察對手的每一次下注", Rect2(92, 548, 620, 42), 19, PokerUI.GOLD)
-	PokerUI.label(self, "完全離線的單人德州撲克\n從下注、發言與攤牌紀錄，辨別誰在虛張聲勢。\n起始籌碼可選 10,000 / 50,000 / 100,000。", Rect2(92, 618, 650, 128), 20, PokerUI.MUTED)
+	PokerUI.label(self, "完全離線的單人德州撲克\n從下注、發言與攤牌紀錄，辨別誰在虛張聲勢。\n起始籌碼可選 100 BB / 500 BB / 1,000 BB。", Rect2(92, 618, 650, 128), 20, PokerUI.MUTED)
 	var setup := PokerUI.panel(self, Rect2(800, 152, 545, 650))
 	PokerUI.label(setup, "設定你的牌局", Rect2(34, 26, 450, 48), 30)
 	PokerUI.label(setup, "電腦對手", Rect2(34, 103, 450, 32))
@@ -54,7 +54,7 @@ func _ready() -> void:
 	start.name = "StartGame"
 	start.add_theme_stylebox_override("normal", PokerUI.box(PokerUI.GREEN, PokerUI.GOLD))
 	PokerUI.button(setup, "離開遊戲", Rect2(34, 602, 475, 48), func(): get_tree().quit())
-	PokerUI.label(self, "NO LIMIT    /    小盲 50 · 大盲 100    /    AI 身分於結束後揭曉", Rect2(90, 826, 1240, 34), 17, PokerUI.MUTED)
+	PokerUI.label(self, "NO LIMIT    /    小盲 0.5 BB · 大盲 1 BB    /    AI 身分於結束後揭曉", Rect2(90, 826, 1240, 34), 17, PokerUI.MUTED)
 	start.grab_focus()
 
 func _selection_changed(_index: int) -> void:
@@ -68,6 +68,4 @@ func _start() -> void:
 	App.start_match()
 
 func _format_chips(amount: int) -> String:
-	if amount >= 100000:
-		return "%d,000" % int(amount / 1000)
-	return "%d,%03d" % [int(amount / 1000), amount % 1000]
+	return StakeFormat.bb(amount)

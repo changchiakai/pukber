@@ -13,7 +13,7 @@ func _ready() -> void:
 	var rows := state.players.duplicate()
 	rows.sort_custom(func(a, b): return a.chips > b.chips)
 	PokerUI.label(self, "名次 / 玩家", Rect2(112, 282, 300, 40), 18, PokerUI.GOLD)
-	PokerUI.label(self, "剩餘籌碼", Rect2(414, 282, 210, 40), 18, PokerUI.GOLD)
+	PokerUI.label(self, "剩餘 BB", Rect2(414, 282, 210, 40), 18, PokerUI.GOLD)
 	PokerUI.label(self, "真實態度", Rect2(644, 282, 270, 40), 18, PokerUI.GOLD)
 	PokerUI.label(self, "加注 / 證實詐唬 / 價值下注", Rect2(959, 282, 360, 40), 18, PokerUI.GOLD)
 	for index in range(rows.size()):
@@ -21,7 +21,7 @@ func _ready() -> void:
 		var row := PokerUI.panel(self, Rect2(94, 335 + index * 67, 1248, 58))
 		var rank_text := "第 %d 名" % player.finish_rank if player.finish_rank > 0 else "尚未分出名次"
 		PokerUI.label(row, rank_text + "  " + player.display_name, Rect2(18, 7, 300, 42), 20)
-		PokerUI.label(row, str(player.chips), Rect2(320, 7, 210, 42), 20, PokerUI.GOLD)
+		PokerUI.label(row, StakeFormat.bb(player.chips), Rect2(320, 7, 210, 42), 20, PokerUI.GOLD)
 		PokerUI.label(row, "真人玩家" if player.seat == 0 else ("說謊型" if player.profile.is_liar else "說實話型"), Rect2(550, 7, 270, 42), 20)
 		PokerUI.label(row, "%d   /   %d   /   %d" % [player.raises, player.proven_bluffs, player.value_bets], Rect2(865, 7, 330, 42), 20)
 	var note := "同手淘汰者並列名次。詐唬／價值下注只按已攤牌資訊計算，不等同真實性格。"

@@ -59,13 +59,13 @@ func redraw() -> void:
 	if state.hand_over:
 		for award in state.awards:
 			pot_amount += int(award.amount)
-	var total := PokerUI.label(content, "底池  %s" % pot_amount, Rect2(center_x - 185, 300, 370, 44), 29, PokerUI.GOLD)
+	var total := PokerUI.label(content, "底池  %s" % StakeFormat.bb(pot_amount), Rect2(center_x - 185, 300, 370, 44), 29, PokerUI.GOLD)
 	total.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	PokerUI.cards(content, view.board, Vector2(center_x - board_width * 0.5, 356), 5, board_scale)
 	var pot_text: Array[String] = []
 	for index in range(view.pots.size()):
 		var pot: Dictionary = view.pots[index]
-		pot_text.append("%s %d" % [("未跟注" if pot.refund else ("主池" if index == 0 else "邊池%d" % index)), pot.amount])
+		pot_text.append("%s %s" % [("未跟注" if pot.refund else ("主池" if index == 0 else "邊池%d" % index)), StakeFormat.bb(int(pot.amount))])
 	var pots := PokerUI.label(content, " · ".join(pot_text), Rect2(center_x - 310, 444, 620, 72), 16, PokerUI.MUTED)
 	pots.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	pots.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -90,11 +90,11 @@ func _draw_seat(seat: Dictionary, position_value: Vector2, actor: int) -> void:
 	var panel := PokerUI.panel(content, Rect2(position_value, seat_size), PokerUI.PANEL, PokerUI.GOLD if actor == seat.seat else Color("365049"))
 	panel.name = "Seat%d" % seat.seat
 	PokerUI.label(panel, seat.name + (" · 已離桌" if seat.eliminated else ""), Rect2(14, 8, seat_size.x - 28, 34), 21, PokerUI.MUTED if seat.eliminated else PokerUI.TEXT)
-	PokerUI.label(panel, "%d 籌碼" % seat.chips, Rect2(14, 42, 134, 30), 19, PokerUI.GOLD)
+	PokerUI.label(panel, StakeFormat.bb(int(seat.chips)), Rect2(14, 42, 134, 30), 19, PokerUI.GOLD)
 	if not seat.eliminated or not seat.cards.is_empty():
 		PokerUI.cards(panel, seat.cards, Vector2(14, 82), 2, _seat_card_scale())
 	PokerUI.label(panel, seat.badges, Rect2(158, 44, seat_size.x - 172, 28), 14, PokerUI.MUTED)
-	PokerUI.label(panel, "本輪 %d  /  本手 %d" % [seat.bet, seat.contribution], Rect2(158, 76, seat_size.x - 172, 28), 14, PokerUI.MUTED)
+	PokerUI.label(panel, "本輪 %s  /  本手 %s" % [StakeFormat.bb(int(seat.bet)), StakeFormat.bb(int(seat.contribution))], Rect2(158, 76, seat_size.x - 172, 28), 14, PokerUI.MUTED)
 	PokerUI.label(panel, seat.action, Rect2(158, 110, seat_size.x - 172, 54), 16, PokerUI.MUTED if seat.folded else PokerUI.TEXT)
 	if not seat.bubble.is_empty() and Time.get_ticks_msec() < int(bubble_until.get(seat.seat, 0)):
 		var bubble_size := Vector2(seat_size.x, 74 if _compact_layout() else 68)
@@ -157,27 +157,28 @@ func _draw_actions(state: TableState, legal: Dictionary) -> void:
 		var next := PokerUI.button(bar, "查看本場結果  →" if state.finished else "下一手  →", Rect2(1004, 22, 344, 54), _next)
 		next.name = "NextHand"
 		return
-	PokerUI.label(bar, "需跟注 %d · 最小加注至 %d" % [legal.call, legal.min_to], Rect2(20, 7, 630, 27), 16, PokerUI.MUTED)
+	PokerUI.label(bar, "需跟注 %s · 最小加注至 %s" % [StakeFormat.bb(int(legal.call)), StakeFormat.bb(int(legal.min_to))], Rect2(20, 7, 630, 27), 16, PokerUI.MUTED)
 	error_label = PokerUI.label(bar, "", Rect2(650, 7, 690, 27), 16, PokerUI.GOLD)
 	var row_y := 52 if _compact_layout() else 48
 	var button_h := 54 if _compact_layout() else 50
 	var fold := PokerUI.button(bar, "棄牌", Rect2(20, row_y, 145, button_h), func(): _act("fold"))
 	fold.name = "Fold"
 	fold.disabled = not legal.active
-	var call := PokerUI.button(bar, "過牌" if legal.check else "跟注 %d" % legal.call, Rect2(180, row_y, 203, button_h), func(): _act("check" if legal.check else "call"))
+	var call := PokerUI.button(bar, "過牌" if legal.check else "跟注 %s" % StakeFormat.bb(int(legal.call)), Rect2(180, row_y, 203, button_h), func(): _act("check" if legal.check else "call"))
 	call.name = "CheckCall"
 	call.disabled = not legal.active
 	PokerUI.label(bar, "加多少", Rect2(416, row_y + 3, 100, 39), 17)
-	PokerUI.label(bar, "實際加注至 %d" % _current_raise_to(state, legal), Rect2(416, 13, 250, 30), 15, PokerUI.GOLD)
+	PokerUI.label(bar, "實際加注至 %s" % StakeFormat.bb(_current_raise_to(state, legal)), Rect2(416, 13, 250, 30), 15, PokerUI.GOLD)
 	raise_input = SpinBox.new()
 	raise_input.name = "RaiseAmount"
 	raise_input.position = Vector2(510, row_y)
 	raise_input.size = Vector2(230, button_h)
-	raise_input.min_value = 100
-	raise_input.max_value = float(_current_raise_increment_limit(state, legal))
-	raise_input.step = 100
+	raise_input.min_value = 1
+	raise_input.max_value = float(_current_raise_increment_limit(state, legal)) / StakeFormat.BIG_BLIND
+	raise_input.step = 1
+	raise_input.suffix = " BB"
 	pending_raise_increment = clampi(pending_raise_increment, 100, int(raise_input.max_value))
-	raise_input.value = pending_raise_increment
+	raise_input.value = float(pending_raise_increment) / StakeFormat.BIG_BLIND
 	raise_input.editable = legal.can_raise
 	raise_input.value_changed.connect(_on_raise_amount_changed)
 	bar.add_child(raise_input)
@@ -196,12 +197,12 @@ func _draw_actions(state: TableState, legal: Dictionary) -> void:
 func _draw_raise_shortcuts(bar: Panel) -> void:
 	var quick := PokerUI.panel(bar, Rect2(314, -118, 1022, 94), Color("102025"), PokerUI.GOLD)
 	PokerUI.label(quick, "快速調整", Rect2(18, 12, 180, 28), 18, PokerUI.GOLD)
-	PokerUI.button(quick, "+100", Rect2(18, 46, 126, 36), func(): _adjust_raise_increment(100))
-	PokerUI.button(quick, "+1000", Rect2(156, 46, 126, 36), func(): _adjust_raise_increment(1000))
-	PokerUI.button(quick, "+10000", Rect2(294, 46, 140, 36), func(): _adjust_raise_increment(10000))
-	PokerUI.button(quick, "-100", Rect2(456, 46, 126, 36), func(): _adjust_raise_increment(-100))
-	PokerUI.button(quick, "-1000", Rect2(594, 46, 126, 36), func(): _adjust_raise_increment(-1000))
-	PokerUI.button(quick, "-10000", Rect2(732, 46, 140, 36), func(): _adjust_raise_increment(-10000))
+	PokerUI.button(quick, "+1 BB", Rect2(18, 46, 126, 36), func(): _adjust_raise_increment(100))
+	PokerUI.button(quick, "+10 BB", Rect2(156, 46, 126, 36), func(): _adjust_raise_increment(1000))
+	PokerUI.button(quick, "+100 BB", Rect2(294, 46, 140, 36), func(): _adjust_raise_increment(10000))
+	PokerUI.button(quick, "-1 BB", Rect2(456, 46, 126, 36), func(): _adjust_raise_increment(-100))
+	PokerUI.button(quick, "-10 BB", Rect2(594, 46, 126, 36), func(): _adjust_raise_increment(-1000))
+	PokerUI.button(quick, "-100 BB", Rect2(732, 46, 140, 36), func(): _adjust_raise_increment(-10000))
 	PokerUI.button(quick, "收起", Rect2(884, 46, 120, 36), _toggle_raise_shortcuts)
 
 func _on_resized() -> void:
@@ -263,7 +264,7 @@ func _adjust_raise_increment(amount: int) -> void:
 	redraw()
 
 func _on_raise_amount_changed(value: float) -> void:
-	pending_raise_increment = int(value)
+	pending_raise_increment = int(value) * StakeFormat.BIG_BLIND
 
 func _history_button_text() -> String:
 	return "關閉紀錄" if history_open else "觀察紀錄"

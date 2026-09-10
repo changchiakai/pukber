@@ -59,19 +59,19 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 					player.voluntary_puts += 1
 					player.entered_pot_this_hand = true
 			commit(player, options.call)
-			player.last_action = "跟注 %d" % options.call if options.call > 0 else "過牌"
+			player.last_action = "跟注 %s" % StakeFormat.bb(int(options.call)) if options.call > 0 else "過牌"
 		"raise":
 			if not options.can_raise or raise_to > options.max_to or raise_to <= state.current_bet:
 				return "加注金額不合法。"
 			if raise_to < options.min_to and raise_to != options.max_to:
-				return "最小加注至 %d；不足時只能全下。" % options.min_to
+				return "最小加注至 %s；不足時只能全下。" % StakeFormat.bb(int(options.min_to))
 			var was_reraise := (state.current_bet > state.settings.big_blind) if state.street == 0 else state.current_bet > 0
 			var increment := raise_to - state.current_bet
 			if increment >= state.min_raise:
 				state.min_raise = increment
 			commit(player, raise_to - player.street_bet)
 			state.current_bet = raise_to
-			player.last_action = "加注至 %d" % raise_to
+			player.last_action = "加注至 %s" % StakeFormat.bb(raise_to)
 			player.raises += 1
 			if state.street == 0 and not player.entered_pot_this_hand:
 				player.voluntary_puts += 1

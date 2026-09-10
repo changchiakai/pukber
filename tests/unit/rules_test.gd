@@ -249,6 +249,7 @@ func test_flow() -> void:
 			check(major == [0, 1, 2, 2, 3][count], "exact personality distribution")
 
 func test_privacy_and_ai() -> void:
+	check(StakeFormat.bb(10000) == "100 BB" and StakeFormat.bb(150) == "1.5 BB", "chip displays use big-blind units")
 	var settings := MatchSettings.new()
 	settings.simulation_samples = 24
 	var game := StartMatchCommand.execute(settings, 99)
@@ -333,6 +334,12 @@ func test_privacy_and_ai() -> void:
 		"pot": 300, "legal": {"check": false, "call": 200, "can_raise": true, "max_to": 10000, "min_to": 500}
 	})
 	check(AIDecisionSystem.choose(bad_defend, AIProfile.new(false, 134), 0.30).action == "fold", "late position still folds a clearly weak defence")
+	var oversized_open_defend := make_ai_observation({
+		"hole": cards([12, 6], [0, 1]), "position_bucket": "late", "in_position": true,
+		"pot": 1150, "legal": {"check": false, "call": 1000, "can_raise": true, "max_to": 10000, "min_to": 2000},
+		"opponents": [{"seat": 1, "chips": 9000, "bet": 1000}], "player_count": 2, "live_count": 2
+	})
+	check(AIDecisionSystem.choose(oversized_open_defend, AIProfile.new(false, 136), 0.48).action == "call", "AI defends a borderline hand against a 10BB overbet")
 	var full_stack_shove := make_ai_observation({
 		"hole": cards([14, 11], [0, 0]), "pot": 10150, "chips": 10000, "bet": 0,
 		"legal": {"check": false, "call": 10000, "can_raise": false, "max_to": 10000, "min_to": 20000},

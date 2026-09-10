@@ -81,7 +81,7 @@ func begin_hand(rotate: bool = true) -> void:
 func post_blind(seat: int, amount: int, title: String) -> void:
 	var player: PlayerState = state.players[seat]
 	BettingSystem.commit(player, amount)
-	player.last_action = "%s %d" % [title, player.street_bet]
+	player.last_action = "%s %s" % [title, StakeFormat.bb(player.street_bet)]
 	state.record(player.display_name + " " + player.last_action)
 
 func act(seat: int, action: String, amount: int = 0, speech: String = "") -> String:
@@ -188,7 +188,7 @@ func finish_hand(showdown: bool) -> void:
 	state.awards = PotSystem.settle(state, scores)
 	for award in state.awards:
 		var player: PlayerState = state.players[award.seat]
-		var message := "%s %s %d" % [player.display_name, "取回未跟注籌碼" if award.refund else "贏得", award.amount]
+		var message := "%s %s %s" % [player.display_name, "取回未跟注籌碼" if award.refund else "贏得", StakeFormat.bb(int(award.amount))]
 		if showdown and not award.refund:
 			message += " · " + HandEvaluator.evaluate(player.hole + state.board).description
 		descriptions.append(message)
