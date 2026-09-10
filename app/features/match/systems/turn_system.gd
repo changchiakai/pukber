@@ -153,6 +153,7 @@ func advance_street() -> void:
 	state.acted_at.clear()
 	for player in state.players:
 		player.street_bet = 0
+		player.aggressive_this_street = false
 		player.bubble = ""
 	state.deck.draw() # Burn card remains unknown to every AI.
 	for _index in range(3 if state.street == 1 else 1):

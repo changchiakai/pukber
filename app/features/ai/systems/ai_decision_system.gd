@@ -237,7 +237,11 @@ static func build_speech(profile: AIProfile, action: String, strong: bool, bluff
 			"我先把氣氛撐滿"
 		]
 
-	return random_line(profile.rng, lines)
+	var speech := random_line(profile.rng, lines)
+	if speech == profile.last_speech:
+		speech = lines[(lines.find(speech) + 1) % lines.size()]
+	profile.last_speech = speech
+	return speech
 
 static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator) -> float:
 	var unseen := PokerDeck.new(observation.deck_count).cards
@@ -247,6 +251,7 @@ static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator)
 	unseen = unseen.filter(func(card): return not known.has(card.identity()))
 	var samples := maxi(1, int(observation.samples))
 	var equity := 0.0
+	var total_weight := 0.0
 	var draws: int = 5 - observation.board.size() + observation.opponents.size() * 2
 	for _sample in range(samples):
 		# Partial Fisher-Yates; only draw what this simulation needs.
@@ -261,17 +266,20 @@ static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator)
 		var hero: int = HandEvaluator.evaluate(observation.hole + board).score
 		var ties := 1
 		var lost := false
+		var weight := 1.0
 		for opponent in range(observation.opponents.size()):
 			var start := missing + opponent * 2
-			var score: int = HandEvaluator.evaluate(pool.slice(start, start + 2) + board).score
+			var candidate := pool.slice(start, start + 2)
+			weight *= range_weight(candidate, observation.board, observation.opponents[opponent], observation)
+			var score: int = HandEvaluator.evaluate(candidate + board).score
 			if score > hero:
 				lost = true
-				break
 			if score == hero:
 				ties += 1
+		total_weight += weight
 		if not lost:
-			equity += 1.0 / ties
-	return equity / samples
+			equity += weight / ties
+	return equity / maxf(0.000001, total_weight)
 
 static func decide(observation: Dictionary, profile: AIProfile) -> Dictionary:
 	var equity := estimate_equity(observation, profile.rng)
@@ -471,94 +479,308 @@ static func should_float(observation: Dictionary, profile: AIProfile, strong: bo
 	chance *= 0.7 if pot_odds > strength + profile.risk_tolerance + 0.05 else 1.0
 	return profile.rng.randf() < clampf(chance, 0.0, 0.72)
 
+# Conservative hand features; nut-draw flags are candidates, never certainty.
+static func hand_features(observation: Dictionary) -> Dictionary:
+	var hole: Array = observation.hole
+	var board: Array = observation.board
+	var category := 0
+	var board_category := 0
+	if board.size() >= 3:
+		category = int(HandEvaluator.evaluate(hole + board).category)
+	if board.size() == 5:
+		board_category = int(HandEvaluator.evaluate(board).category)
+	var personal_pair: bool = hole[0].rank == hole[1].rank
+	for card in hole:
+		for public_card in board:
+			personal_pair = personal_pair or card.rank == public_card.rank
+	var nut_draw := false
+	var draw := false
+	var blocker := false
+	for suit in range(4):
+		var count := 0
+		var owns_ace := false
+		for card in board:
+			if card.suit == suit:
+				count += 1
+		for card in hole:
+			if card.suit == suit and card.rank == 14:
+				owns_ace = true
+		blocker = blocker or (owns_ace and count >= 3)
+		var total := count
+		for card in hole:
+			if card.suit == suit:
+				total += 1
+		draw = draw or (total == 4 and total > count and board.size() < 5)
+		nut_draw = nut_draw or (owns_ace and total == 4 and board.size() < 5)
+	# Broadway draws with a private ace are conservative straight-nut candidates.
+	var ranks: Array = []
+	var has_ace := false
+	for card in hole + board:
+		if not ranks.has(card.rank):
+			ranks.append(card.rank)
+	for card in hole:
+		has_ace = has_ace or card.rank == 14
+	var broadway := 0
+	for rank in [10, 11, 12, 13, 14]:
+		if ranks.has(rank):
+			broadway += 1
+	nut_draw = nut_draw or (has_ace and broadway == 4 and board.size() < 5)
+	# Four distinct ranks in a five-rank window, with a private contribution.
+	# A2345 uses ace-low mapping; duplicate cards never inflate the count.
+	if board.size() >= 3 and board.size() < 5:
+		for low_rank in range(1, 11):
+			var hits := 0
+			var private_hit := false
+			for rank in range(low_rank, low_rank + 5):
+				var actual_rank := 14 if rank == 1 else rank
+				if ranks.has(actual_rank):
+					hits += 1
+				var on_board := false
+				for card in board:
+					on_board = on_board or card.rank == actual_rank
+				for card in hole:
+					private_hit = private_hit or (card.rank == actual_rank and not on_board)
+			draw = draw or (hits == 4 and private_hit)
+	# Multi-deck blockers cannot remove all copies of a card.
+	blocker = blocker and int(observation.get("deck_count", 1)) == 1
+	return {"category": category, "made": category >= 1 and personal_pair or category >= 4 and category > board_category,
+		"nut_draw": nut_draw, "draw": draw or nut_draw, "blocker": blocker}
+
+# Decisions mix only inside a viable range. Personality never bypasses price checks.
+static func facing_pressure(observation: Dictionary) -> float:
+	var highest_bet := int(observation.bet)
+	var read := 0.0
+	for opponent in observation.opponents:
+		var wager := int(opponent.get("bet", 0))
+		var model: Dictionary = opponent.get("model", {})
+		if wager > highest_bet:
+			highest_bet = wager
+			read = float(model.get("pressure_read", 0.0))
+		elif wager == highest_bet and wager > int(observation.bet):
+			read = minf(read, float(model.get("pressure_read", 0.0)))
+	return read
+
+static func speculative_start(hole: Array) -> bool:
+	var high := maxi(int(hole[0].rank), int(hole[1].rank))
+	var low := mini(int(hole[0].rank), int(hole[1].rank))
+	var suited: bool = hole[0].suit == hole[1].suit
+	return high == low or (suited and (high - low <= 3 or high == 14)) or (high - low == 1 and low >= 8)
+
 static func choose(observation: Dictionary, profile: AIProfile, equity: float) -> Dictionary:
 	var legal: Dictionary = observation.legal
-	var fair_share: float = 1.0 / (observation.opponents.size() + 1)
-	var texture := board_texture(observation.get("board", []))
-	var tendencies := opponent_tendencies(observation.get("opponents", []))
 	var street := int(observation.get("street", 0))
+	var opponents: Array = observation.opponents
+	var heads_up := opponents.size() == 1
+	var texture := board_texture(observation.board)
+	var features := hand_features(observation)
+	var tendencies := opponent_tendencies(opponents)
+	var bb := maxi(1, int(observation.big_blind))
+	var cost := int(legal.call)
+	var pot := maxf(float(bb), float(observation.pot))
+	var effective := 0
+	var can_fold_count := 0
+	for opponent in opponents:
+		effective = maxi(effective, maxi(0, int(opponent.chips) + int(opponent.bet) - int(observation.bet)))
+		if int(opponent.chips) > 0:
+			can_fold_count += 1
+	effective = mini(int(observation.chips), effective)
+	var stack_bb := float(effective) / bb
+	var spr := float(maxi(0, effective - cost)) / (pot + cost)
+	var odds := float(cost) / (pot + cost)
 	var in_position := bool(observation.get("in_position", false))
-	var bucket := String(observation.get("position_bucket", "middle"))
-	var heads_up := int(observation.get("player_count", observation.opponents.size() + 1)) <= 2
-	var wetness := float(texture.get("wetness", 0.0))
-	var strength := clampf(equity + profile.rng.randf_range(-0.05, 0.05), 0.0, 1.0)
-	strength += 0.04 if in_position else -0.02
-	strength += 0.03 if heads_up else 0.0
-	strength -= 0.02 if street >= 1 and wetness >= 0.55 and not in_position else 0.0
-	strength += 0.03 if int(tendencies.get("calling_count", 0)) > 0 and equity > 0.58 else 0.0
-	strength -= 0.03 if int(tendencies.get("reraiser_count", 0)) > 0 and street == 0 and not in_position else 0.0
-	strength = clampf(strength, 0.0, 1.0)
-	var strength_threshold := fair_share + 0.12
-	strength_threshold -= 0.03 if bucket == "late" else 0.0
-	strength_threshold += 0.03 if bucket == "early" else 0.0
-	strength_threshold -= 0.03 if int(tendencies.get("tight_count", 0)) > int(tendencies.get("calling_count", 0)) else 0.0
-	strength_threshold += 0.03 if int(tendencies.get("reraiser_count", 0)) > 0 and not in_position else 0.0
-	var strong: bool = strength > strength_threshold
-	var bluff_rate := profile.bluff_rate
-	bluff_rate *= 1.2 if in_position else 0.85
-	bluff_rate *= 1.15 if wetness < 0.4 else 0.75
-	bluff_rate *= 1.1 if heads_up else 1.0
-	bluff_rate *= 1.25 if float(tendencies.get("avg_fold_rate", 0.0)) >= 0.28 else 1.0
-	bluff_rate *= 0.58 if int(tendencies.get("calling_count", 0)) > 0 else 1.0
-	bluff_rate *= 0.82 if int(tendencies.get("reraiser_count", 0)) > 0 and street == 0 else 1.0
-	var bluff: bool = not strong and profile.rng.randf() < clampf(bluff_rate, 0.0, 0.55)
-	seed_street_plan(observation, profile, fair_share, strength, strong, bluff, texture, tendencies)
-	var plan := apply_street_plan(observation, profile, fair_share, strength, strong, bluff, tendencies, texture)
-	bluff = bool(plan.get("bluff", bluff))
-	strength_threshold += float(plan.get("threshold_shift", 0.0))
-	strong = strength > strength_threshold
-	var aggression := float(plan.get("aggression", profile.aggression))
-	var pot_odds := float(legal.call) / maxf(1.0, observation.pot + legal.call)
-	var action := "check" if legal.check else "call"
+	var pressure_read := facing_pressure(observation)
+	var margin := 0.025 + 0.015 * float(maxi(0, opponents.size() - 1))
+	margin += 0.015 if street < 3 and not in_position else 0.0
+	# Adapt uncertainty padding, never fabricate equity or ignore the actual price.
+	margin = maxf(0.005, margin - pressure_read * (0.025 if heads_up else 0.01))
+	var strength := clampf(equity, 0.0, 1.0)
+	var value := strength >= (0.59 if heads_up else 0.67)
+	var action := "check" if bool(legal.check) else "fold"
 	var amount := 0
-	var trap := should_trap(observation, profile, strong, texture, plan)
-	var floating := should_float(observation, profile, strong, bluff, fair_share, strength, pot_odds, tendencies)
-	if trap and int(observation.get("street", 0)) <= 2 and profile.hand_plan != "pressure":
-		profile.set_hand_plan("pressure", int(observation.get("street", 0)), 1, 0.14, 0.1)
-	if floating:
-		bluff = false
-		action = "call"
-		if int(observation.get("street", 0)) == 1 and profile.hand_plan.is_empty():
-			profile.set_hand_plan("pressure", 1, 1, 0.1, -0.04)
-	var budget := int(observation.chips * (0.22 if bluff else 0.65))
-	if street >= 1 and strong and wetness >= 0.55:
-		budget = int(observation.chips * 0.78)
-	elif in_position and not bluff:
-		budget = int(observation.chips * 0.58)
-	if strong and int(tendencies.get("calling_count", 0)) > 0:
-		budget = maxi(budget, int(observation.chips * 0.72))
-	if bluff and int(tendencies.get("tight_count", 0)) > 0:
-		budget = int(observation.chips * 0.26)
-	if bool(plan.get("control_active", false)) and not strong:
-		budget = mini(budget, int(observation.chips * 0.38))
-	if not trap and not floating and legal.can_raise and (strong or bluff or bool(plan.get("continue_pressure", false))) and profile.rng.randf() < aggression:
-		var fraction := choose_bet_fraction(observation, profile, strong, bluff, texture)
-		if strong and int(tendencies.get("calling_count", 0)) > 0:
-			fraction += 0.12
-		elif bluff and int(tendencies.get("tight_count", 0)) > 0:
-			fraction -= 0.08
-		fraction += float(plan.get("size_bias", 0.0))
-		fraction = clampf(fraction, 0.25, 4.8)
+	var bluff := false
+	var reason := "免費看牌或價格不合，保留籌碼"
+	var fraction := 0.5
+	var late := String(observation.get("position_bucket", "middle")) == "late"
+	var facing_raise := int(observation.bet) + cost > bb
+	var quality := preflop_quality(observation.hole)
+	var premium := quality >= 0.82
+	var raise_wanted := false
+	var shove := false
+	var fold_signal := float(tendencies.avg_fold_rate) >= 0.30
+	var station := int(tendencies.calling_count) > 0
+	var previous_raise := profile.last_plan_action == "raise" and profile.last_plan_action_street == street - 1
+	if street == 0:
+		var entrants := 0
+		for opponent in opponents:
+			if bool(opponent.get("entered_pot", false)):
+				entrants += 1
+		var speculative := speculative_start(observation.hole)
+		# Small preflop investments need room to improve, not stack-off equity.
+		var cheap_price := cost > 0 and cost <= bb * 3 and cost <= effective * 0.08
+		var deep_enough := effective >= cost * 20
+		var small_call_margin := 0.01 if late else 0.02
+		var implied_allowance := 0.035 if speculative and deep_enough else 0.0
+		var cheap_equity := strength >= maxf(0.12, odds + small_call_margin - implied_allowance)
+		var open_entry := 0.45
+		if late:
+			open_entry = 0.33
+		elif String(observation.get("position_bucket", "middle")) == "middle":
+			open_entry = 0.40
+		open_entry += profile.opening_bias - (0.025 if profile.is_liar else 0.0)
+		if heads_up:
+			open_entry -= 0.04
+		var playable := quality >= open_entry
+		value = quality >= 0.72
+		if stack_bb <= 12.0:
+			# Short-stack pushes widen only when nobody has opened yet.
+			shove = playable and strength >= maxf(odds + margin, 0.40 if heads_up else 0.34)
+			if facing_raise:
+				shove = quality >= 0.70 and strength >= odds + margin
+			if cost > 0 and strength >= odds + margin and quality >= 0.65:
+				action = "call"
+			raise_wanted = shove
+			reason = "12BB 內依位置、牌力與價格推進"
+		elif not facing_raise:
+			raise_wanted = playable
+			reason = "依位置開池，保留翻牌後操作空間"
+			# Medium hands may limp/overlimp; premium hands still build the pot.
+			var can_limp := cheap_price and cost <= bb and cheap_equity
+			can_limp = can_limp and (quality >= 0.40 or speculative)
+			if can_limp and quality < 0.72:
+				var limp_chance := 0.80 if entrants > 0 else 0.45
+				if not playable or profile.rng.randf() < limp_chance:
+					action = "call"
+					raise_wanted = false
+					reason = "低成本跟進，保留多人翻牌與改善牌力的空間"
+			if bool(legal.check) and entrants > 0 and quality < 0.72:
+				raise_wanted = false
+				reason = "大盲免費看翻牌，中等牌不強行趕走跟進者"
+		else:
+			var call_entry := (0.43 if late else 0.49) + profile.opening_bias
+			var expensive := cost > bb * 4 or cost > effective * 0.15
+			if expensive:
+				call_entry += lerpf(0.08, 0.02, pressure_read)
+			call_entry -= pressure_read * 0.05
+			var defend := quality >= call_entry and strength >= odds + margin
+			# Existing callers improve the price; do not add a second player-count penalty.
+			var cheap_entry := 0.38 if late or entrants >= 2 else 0.43
+			var small_open_defend := cheap_price and cheap_equity
+			small_open_defend = small_open_defend and (quality >= cheap_entry or (speculative and deep_enough))
+			defend = defend or small_open_defend
+			if defend and cost > 0:
+				action = "call"
+			raise_wanted = premium and strength >= maxf(0.56, odds + margin + 0.10)
+			if int(tendencies.reraiser_count) > 0:
+				raise_wanted = quality >= 0.77 and strength >= maxf(0.57, odds + margin + 0.10)
+			shove = raise_wanted and stack_bb <= 25.0
+			reason = "按跟注價格防守；強範圍再加注"
+			if action == "call" and small_open_defend:
+				reason = "小注價格合適，跟進參與翻牌"
+			if action == "call" and pressure_read >= 0.4:
+				reason = "對手近期頻繁施壓，放寬範圍但仍按價格防守"
+		if not bool(legal.can_raise) and cost > 0 and strength >= odds + margin:
+			action = "call"
+	else:
+		var made := bool(features.made)
+		var draw := bool(features.draw) and street < 3
+		var profitable_call := strength >= odds + margin
+		if cost > 0 and profitable_call and (made or draw or heads_up):
+			action = "call"
+			reason = "依範圍權益與底池賠率防守"
+		value = value and made
+		# A prior raise supplies initiative, never permission to barrel blindly.
+		var continuation := previous_raise and heads_up and cost == 0 and float(texture.wetness) < 0.48
+		var credible := draw or (bool(features.blocker) and fold_signal)
+		credible = credible or (continuation and strength >= 0.24 and street < 3)
+		var bluff_allowed := heads_up and can_fold_count == opponents.size() and not station
+		bluff_allowed = bluff_allowed and cost <= pot * 0.25 and credible
+		var bluff_chance := profile.bluff_rate + (0.12 if continuation else 0.0)
+		bluff_chance += 0.10 if fold_signal else 0.0
+		bluff = not value and bluff_allowed and profile.rng.randf() < clampf(bluff_chance, 0.0, 0.55)
+		raise_wanted = value or bluff
+		fraction = 0.65 if float(texture.wetness) >= 0.5 else 0.40
+		if street == 2:
+			fraction = 0.75
+			raise_wanted = bluff or (value and strength >= 0.69)
+		elif street == 3:
+			fraction = 0.55
+		# Shared size distribution avoids mechanically identifying bluffs by size.
+		fraction *= [0.85, 1.0, 1.15][profile.rng.randi_range(0, 2)]
+		if station:
+			fraction += 0.15
+		if not heads_up and strength < 0.74:
+			raise_wanted = false
+		# Facing a bet, medium value prefers calling over bloating the pot.
+		if cost > 0 and not bluff:
+			raise_wanted = value and strength >= maxf(0.73, odds + 0.25)
+		shove = raise_wanted and not bluff and strength >= 0.76 and spr <= 1.2
+		var trap := value and heads_up and cost == 0 and not in_position
+		trap = trap and float(texture.wetness) < 0.42 and spr > 2.0
+		if trap and profile.rng.randf() < profile.trap_rate:
+			raise_wanted = false
+			reason = "乾燥牌面偶爾過牌誘敵，保護過牌範圍"
+		elif raise_wanted:
+			reason = "持續施壓或半詐唬" if bluff else "按牌面與對手跟注傾向取值"
+	if bool(legal.can_raise) and (raise_wanted or shove):
 		var target := 0
 		if street == 0:
-			target = int(maxf(float(legal.min_to), observation.big_blind * fraction))
+			target = int(bb * (2.3 if late else 2.7))
+			if facing_raise:
+				target = int((int(observation.bet) + cost) * (3.0 if late else 3.5))
 		else:
-			target = int(observation.bet + legal.call + maxi(observation.big_blind, int(observation.pot * fraction)))
-		amount = mini(legal.max_to, maxi(legal.min_to, target))
-		if amount - int(observation.bet) <= budget or (strong and strength > 0.72) or (street >= 2 and strong and in_position) or bool(plan.get("continue_pressure", false)):
+			target = int(observation.bet) + cost + maxi(bb, int((pot + cost) * fraction))
+		amount = mini(int(legal.max_to), maxi(int(legal.min_to), target))
+		if shove:
+			amount = int(legal.max_to)
+		var risk := amount - int(observation.bet)
+		var affordable_bluff := risk <= effective * 0.30 and risk <= (pot + cost) * 1.15
+		# An oversized minimum raise also needs stack-off equity for value hands.
+		var oversized := risk > effective * 0.45 and risk > (pot + cost) * 1.5
+		if (not bluff or affordable_bluff) and (shove or not oversized or strength >= 0.73):
 			action = "raise"
-	if action != "raise" and not legal.check and not floating:
-		if street >= 1 and in_position and not strong and strength < fair_share and profile.float_rate < 0.15 and float(tendencies.get("avg_reraise_rate", 0.0)) >= 0.16:
-			action = "fold"
-		var fold_threshold := profile.risk_tolerance
-		fold_threshold += 0.02 if in_position else -0.02
-		fold_threshold += 0.03 if heads_up else 0.0
-		fold_threshold += float(plan.get("fold_shift", 0.0))
-		if strength + fold_threshold < pot_odds or (legal.call > observation.chips * (0.52 if in_position else 0.42) and strength < fair_share and not bluff):
-			action = "fold"
+	if action != "raise":
+		amount = 0
+		bluff = false
+	profile.set_hand_plan("pressure" if action == "raise" else "control", street, 1, 0.0, 0.0)
 	profile.note_plan_action(street, action)
-	var claim_strong := strong
+	var claim_strong := value
 	if profile.rng.randf() < (0.65 if profile.is_liar else 0.08):
 		claim_strong = not claim_strong
-	var speech := build_speech(profile, action, strong, bluff, claim_strong)
-	return {"action": action, "amount": amount, "speech": speech}
+	return {"action": action, "amount": amount,
+		"speech": build_speech(profile, action, value, bluff, claim_strong), "reason": reason}
+
+static func preflop_quality(hole: Array) -> float:
+	var high := maxi(int(hole[0].rank), int(hole[1].rank))
+	var low := mini(int(hole[0].rank), int(hole[1].rank))
+	if high == low:
+		return clampf(0.5 + float(high) * 0.035, 0.0, 1.0)
+	var quality := float(high + low) / 36.0
+	quality += 0.07 if hole[0].suit == hole[1].suit else 0.0
+	quality += 0.04 if high - low == 1 else 0.0
+	quality -= 0.08 if high - low >= 5 else 0.0
+	return clampf(quality, 0.0, 1.0)
+
+# Importance weighting uses public actions only, not sampled future board cards.
+static func range_weight(hole: Array, board: Array, opponent: Dictionary, observation: Dictionary) -> float:
+	var model: Dictionary = opponent.get("model", {})
+	var confidence := clampf(float(model.get("hands", 0)) / 30.0, 0.0, 1.0)
+	var vpip := lerpf(0.3, clampf(float(model.get("vpip", 0.3)), 0.1, 0.8), confidence)
+	var quality := preflop_quality(hole)
+	var weight := clampf(0.5 + quality - (1.0 - vpip) * 0.5, 0.15, 1.0)
+	var raised := bool(opponent.get("aggressive", false))
+	var pressure_read := clampf(float(model.get("pressure_read", 0.0)), 0.0, 1.0)
+	weight = lerpf(weight, 1.0, pressure_read * 0.55)
+	if raised:
+		var weak_raise_weight := lerpf(0.50, 0.95, pressure_read)
+		weight *= 1.0 if quality >= 0.72 else weak_raise_weight
+	if board.size() >= 3 and bool(opponent.get("street_aggressive", raised)):
+		var category := int(HandEvaluator.evaluate(hole + board).category)
+		var candidate_features := hand_features({"hole": hole, "board": board,
+			"deck_count": observation.get("deck_count", 1)})
+		# Keep plausible draws in an aggressor's range, rather than assuming made hands.
+		var weak_postflop_weight := lerpf(0.35, 0.80, pressure_read)
+		weight *= 1.0 if category >= 2 else (maxf(0.65, weak_postflop_weight) if category == 1 or bool(candidate_features.draw) else weak_postflop_weight)
+	# Empty model callers (e.g. offline coaching) keep uniform sampling.
+	if model.is_empty() and not raised and not observation.has("street"):
+		return 1.0
+	return maxf(0.02, weight)

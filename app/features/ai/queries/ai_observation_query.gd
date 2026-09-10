@@ -9,11 +9,17 @@ static func execute(state: TableState, seat: int) -> Dictionary:
 	for other in state.players:
 		if other.seat != seat and not other.eliminated and not other.folded:
 			opponents.append({"seat": other.seat, "chips": other.chips, "bet": other.street_bet,
-				"model": _opponent_model(other)})
+				"aggressive": other.aggressive_this_hand,
+				"entered_pot": other.entered_pot_this_hand,
+				"street_aggressive": other.aggressive_this_street, "model": _opponent_model(other)})
 	var live_seats := state.live_seats()
 	var contenders := state.contenders()
 	var relative_button := _relative_button_position(live_seats, state.dealer, seat)
-	var relative_street := _relative_street_position(contenders, state.dealer, seat)
+	var acting_seats: Array = []
+	for other in state.players:
+		if other.can_act():
+			acting_seats.append(other.seat)
+	var relative_street := _relative_street_position(acting_seats, state.dealer, seat)
 	return {"hole": copy_cards(player.hole), "board": copy_cards(state.board),
 		"opponents": opponents, "pot": state.pot_total(), "chips": player.chips,
 		"bet": player.street_bet, "deck_count": state.settings.deck_count(),
@@ -22,7 +28,7 @@ static func execute(state: TableState, seat: int) -> Dictionary:
 		"street": state.street, "player_count": contenders.size(), "live_count": live_seats.size(),
 		"relative_button": relative_button, "relative_street": relative_street,
 		"position_bucket": _position_bucket(relative_button, live_seats.size()),
-		"in_position": relative_street >= contenders.size() - 1}
+		"in_position": relative_street >= acting_seats.size() - 1}
 
 static func copy_cards(cards: Array) -> Array:
 	var result: Array = []
@@ -45,11 +51,12 @@ static func _relative_button_position(live_seats: Array, dealer: int, seat: int)
 static func _relative_street_position(contenders: Array, dealer: int, seat: int) -> int:
 	if contenders.is_empty():
 		return 0
-	var start_index := contenders.find(dealer)
-	if start_index == -1:
-		start_index = 0
-	else:
-		start_index = (start_index + 1) % contenders.size()
+	# The button may have folded or be all-in. Order seats clockwise anyway.
+	var start_index := 0
+	for index in range(contenders.size()):
+		if int(contenders[index]) > dealer:
+			start_index = index
+			break
 	var ordered: Array = []
 	for offset in range(contenders.size()):
 		ordered.append(contenders[(start_index + offset) % contenders.size()])
@@ -60,26 +67,36 @@ static func _position_bucket(relative_button: int, player_count: int) -> String:
 		return "late" if relative_button == 0 else "early"
 	if relative_button == 0:
 		return "late"
-	if relative_button >= player_count - 2:
+	if relative_button >= maxi(3, player_count - 2):
+		return "late"
+	if relative_button <= 2:
 		return "early"
 	return "middle"
 
 static func _opponent_model(player: PlayerState) -> Dictionary:
 	var hands := maxf(1.0, float(player.hands_played))
-	var vpip := float(player.voluntary_puts) / hands
-	var call_rate := float(player.call_actions) / hands
-	var fold_rate := float(player.fold_to_bet) / hands
-	var reraise_rate := float(player.reraises) / hands
+	var confidence := clampf(hands / 30.0, 0.0, 1.0) if player.hands_played > 0 else 0.0
+	var vpip := lerpf(0.3, float(player.voluntary_puts) / hands, confidence)
+	# These are per-hand frequencies, not conditional action probabilities.
+	var call_rate := lerpf(0.25, minf(1.0, float(player.call_actions) / hands), confidence)
+	var fold_rate := lerpf(0.20, minf(1.0, float(player.fold_to_bet) / hands), confidence)
+	var reraise_rate := lerpf(0.08, minf(1.0, float(player.reraises) / hands), confidence)
 	var showdown_aggression := float(player.proven_bluffs + player.value_bets)
 	var bluff_showdown_rate := float(player.proven_bluffs) / maxf(1.0, showdown_aggression)
+	var pressure_hands := 0
+	for pressure in player.recent_pressure:
+		pressure_hands += pressure
+	# A few raises are evidence of activity, not proof of bluffing.
+	var pressure_read := clampf(float(pressure_hands - 1) / 5.0, 0.0, 1.0)
 	return {
+		"pressure_read": pressure_read,
 		"hands": player.hands_played,
 		"vpip": vpip,
 		"call_rate": call_rate,
 		"fold_to_bet_rate": fold_rate,
 		"reraise_rate": reraise_rate,
 		"bluff_showdown_rate": bluff_showdown_rate,
-		"style": _style_from_model(vpip, call_rate, fold_rate, reraise_rate)
+		"style": _style_from_model(vpip, call_rate, fold_rate, reraise_rate) if player.hands_played >= 10 else "balanced"
 	}
 
 static func _style_from_model(vpip: float, call_rate: float, fold_rate: float, reraise_rate: float) -> String:

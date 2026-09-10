@@ -310,6 +310,36 @@ func test_privacy_and_ai() -> void:
 	var early_raises := count_ai_raises(early, false, 0.36, 2000)
 	var late_raises := count_ai_raises(late, false, 0.36, 2000)
 	check(late_raises > early_raises * 6, "late position opens much wider than early")
+	var middle_open := make_ai_observation({
+		"hole": cards([12, 8], [0, 1]), "position_bucket": "middle", "in_position": false
+	})
+	check(AIDecisionSystem.choose(middle_open, AIProfile.new(false, 131), 0.44).action == "raise", "middle position opens a playable hand")
+	var early_fold := make_ai_observation({
+		"hole": cards([13, 5], [0, 1]), "position_bucket": "early", "in_position": false
+	})
+	check(AIDecisionSystem.choose(early_fold, AIProfile.new(false, 132), 0.44).action == "fold", "early position keeps weaker opens out")
+	var after_folds := make_ai_observation({
+		"hole": cards([12, 8], [0, 1]), "position_bucket": "early", "in_position": false,
+		"live_count": 4, "player_count": 3
+	})
+	check(AIDecisionSystem.choose(after_folds, AIProfile.new(false, 132), 0.44).action == "raise", "unopened table widens after an earlier fold")
+	var defend_open := make_ai_observation({
+		"hole": cards([12, 11], [0, 0]), "position_bucket": "late", "in_position": true,
+		"pot": 300, "legal": {"check": false, "call": 200, "can_raise": true, "max_to": 10000, "min_to": 500}
+	})
+	check(AIDecisionSystem.choose(defend_open, AIProfile.new(false, 133), 0.52).action == "call", "late position calls a normal open with a strong suited broadway")
+	var bad_defend := make_ai_observation({
+		"hole": cards([7, 2], [0, 1]), "position_bucket": "late", "in_position": true,
+		"pot": 300, "legal": {"check": false, "call": 200, "can_raise": true, "max_to": 10000, "min_to": 500}
+	})
+	check(AIDecisionSystem.choose(bad_defend, AIProfile.new(false, 134), 0.30).action == "fold", "late position still folds a clearly weak defence")
+	var full_stack_shove := make_ai_observation({
+		"hole": cards([14, 11], [0, 0]), "pot": 10150, "chips": 10000, "bet": 0,
+		"legal": {"check": false, "call": 10000, "can_raise": false, "max_to": 10000, "min_to": 20000},
+		"opponents": [{"seat": 1, "chips": 0, "bet": 10000}], "player_count": 2, "live_count": 2,
+		"position_bucket": "late", "in_position": true
+	})
+	check(AIDecisionSystem.choose(full_stack_shove, AIProfile.new(false, 135), 0.52).action == "call", "AI calls a full-stack shove with a strong suited ace")
 	var dry_board := make_ai_observation({
 		"board": cards([14, 7, 2], [0, 1, 2]),
 		"street": 1,

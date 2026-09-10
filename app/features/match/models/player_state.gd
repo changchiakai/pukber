@@ -22,6 +22,9 @@ var call_actions: int = 0
 var fold_to_bet: int = 0
 var reraises: int = 0
 var aggressive_this_hand: bool = false
+var aggressive_this_street: bool = false
+# Public aggression in the last eight hands, one vote per hand.
+var recent_pressure: Array[int] = []
 var finish_rank: int = 0
 var entered_pot_this_hand: bool = false
 
@@ -38,6 +41,11 @@ func reset_hand() -> void:
 	last_action = "已離桌" if eliminated else "等待行動"
 	bubble = ""
 	aggressive_this_hand = false
+	aggressive_this_street = false
+	if not eliminated:
+		recent_pressure.append(0)
+		if recent_pressure.size() > 8:
+			recent_pressure.pop_front()
 	entered_pot_this_hand = false
 
 func can_act() -> bool:

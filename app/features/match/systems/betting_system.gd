@@ -79,6 +79,9 @@ static func apply(state: TableState, seat: int, action: String, raise_to: int = 
 			if was_reraise:
 				player.reraises += 1
 			player.aggressive_this_hand = true
+			player.aggressive_this_street = true
+			if not player.recent_pressure.is_empty():
+				player.recent_pressure[player.recent_pressure.size() - 1] = 1
 		_:
 			return "未知操作。"
 	if player.chips == 0 and not player.folded:

@@ -9,6 +9,8 @@ var bluff_size_bias: float
 var value_size_bias: float
 var trap_rate: float
 var float_rate: float
+var opening_bias: float = 0.0
+var last_speech: String = ""
 var rng := RandomNumberGenerator.new()
 var hand_plan: String = ""
 var plan_anchor_street: int = -1
@@ -25,9 +27,11 @@ func _init(liar: bool = false, random_seed: int = 1) -> void:
 	risk_tolerance = 0.18 if liar else 0.08
 	bluff_size_bias = 0.14 if liar else -0.04
 	value_size_bias = -0.03 if liar else 0.08
-	trap_rate = 0.02 if liar else 0.48
+	trap_rate = 0.12 if liar else 0.24
 	float_rate = 0.4 if liar else 0.08
 	rng.seed = random_seed
+	# Stable individual style for this match; never change it to favour the human.
+	opening_bias = rng.randf_range(-0.025, 0.025)
 	reset_hand_plan()
 
 func reset_hand_plan() -> void:
