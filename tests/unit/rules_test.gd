@@ -118,8 +118,7 @@ func test_evaluator() -> void:
 	check(HandEvaluator.evaluate(cards([14, 13, 12, 10, 8], [0, 0, 0, 0, 0])).kickers == [14, 13, 12, 10, 8], "flush keeps top five ranks")
 	check(HandEvaluator.evaluate(cards([14, 13, 12, 11, 10])).category == 4, "broadway straight without flush")
 	check(HandEvaluator.evaluate(cards([14, 14, 8, 8, 13])).score > HandEvaluator.evaluate(cards([14, 14, 8, 8, 12])).score, "kicker comparison")
-	check(HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [0, 1, 2, 3, 0])).score > HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [1, 1, 2, 3, 0])).score, "suit ordering breaks rank ties")
-	check("♠" in HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [0, 1, 2, 3, 0])).description, "description shows suit order")
+	check(HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [0, 1, 2, 3, 0])).score == HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [1, 1, 2, 3, 0])).score, "suits never break rank ties")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 842
 	for iteration in range(250):

@@ -4,7 +4,8 @@ extends RefCounted
 const NAMES = ["高牌", "一對", "兩對", "三條", "順子", "同花", "葫蘆", "四條", "同花順", "五條"]
 
 # Direct best-five evaluation for standard hold'em hands.
-# The score encodes category, then rank order, then suit order.
+# The score encodes category and rank order only. Suits identify physical cards,
+# but never affect a hand's category or tie-break.
 static func evaluate(cards: Array) -> Dictionary:
 	assert(cards.size() >= 5)
 	var counts: Dictionary = {}
@@ -85,16 +86,9 @@ static func evaluate(cards: Array) -> Dictionary:
 	var high_cards := top_cards(cards, 5)
 	return result(0, card_ranks(high_cards), high_cards)
 
-static func suit_weight(suit: int) -> int:
-	return 4 - suit
-
 static func compare_cards_desc(a, b) -> bool:
 	if a.rank == b.rank:
-		var a_suit := suit_weight(a.suit)
-		var b_suit := suit_weight(b.suit)
-		if a_suit == b_suit:
-			return a.copy_id > b.copy_id
-		return a_suit > b_suit
+		return a.copy_id > b.copy_id
 	return a.rank > b.rank
 
 static func top_cards(cards: Array, count: int) -> Array:
@@ -163,11 +157,9 @@ static func result(category: int, kickers: Array, ordered_cards: Array = []) -> 
 	var score := category
 	for index in range(5):
 		var rank_value := int(kickers[index]) if index < kickers.size() else 0
-		var suit_value := 0
 		if index < ordered_cards.size():
 			rank_value = int(ordered_cards[index].rank)
-			suit_value = suit_weight(int(ordered_cards[index].suit))
-		score = score * 80 + rank_value * 5 + suit_value
+		score = score * 15 + rank_value
 	var labels: Array[String] = []
 	if not ordered_cards.is_empty():
 		for card in ordered_cards:
