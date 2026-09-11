@@ -174,10 +174,11 @@ func _draw_actions(state: TableState, legal: Dictionary) -> void:
 	raise_input.position = Vector2(510, row_y)
 	raise_input.size = Vector2(230, button_h)
 	raise_input.min_value = 1
-	raise_input.max_value = float(_current_raise_increment_limit(state, legal)) / StakeFormat.BIG_BLIND
+	var max_increment := _current_raise_increment_limit(state, legal)
+	raise_input.max_value = float(max_increment) / StakeFormat.BIG_BLIND
 	raise_input.step = 1
 	raise_input.suffix = " BB"
-	pending_raise_increment = clampi(pending_raise_increment, 100, int(raise_input.max_value))
+	pending_raise_increment = clampi(pending_raise_increment, 100, max_increment)
 	raise_input.value = float(pending_raise_increment) / StakeFormat.BIG_BLIND
 	raise_input.editable = legal.can_raise
 	raise_input.value_changed.connect(_on_raise_amount_changed)
