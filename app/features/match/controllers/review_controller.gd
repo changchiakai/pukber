@@ -14,7 +14,7 @@ func _ready() -> void:
 	else:
 		for index in range(reviews.size()):
 			_draw_review(reviews[index], index)
-	PokerUI.button(self, "返回結算", Rect2(1050, 794, 292, 60), App.show_result).name = "BackToResult"
+	PokerUI.accent_button(self, "返回結算", Rect2(1050, 794, 292, 60), App.show_result).name = "BackToResult"
 
 func _draw_review(review: Dictionary, index: int) -> void:
 	var panel := PokerUI.panel(self, Rect2(94, 212 + index * 180, 1248, 156), Color("112b29"), PokerUI.GOLD)

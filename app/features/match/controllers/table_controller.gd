@@ -49,6 +49,7 @@ func redraw() -> void:
 	var board_scale := _board_scale()
 	var board_width := 56.0 * board_scale + 64.0 * board_scale * 4.0
 	PokerUI.label(content, "德州練習桌", Rect2(32, 17, 300, 49), 30)
+	PokerUI.label(content, "NO LIMIT  ·  OFFLINE TABLE", Rect2(34, 58, 360, 24), 12, PokerUI.MUTED)
 	PokerUI.label(content, "第 %02d 手   /   %s   /   單副牌 52 張" % [state.hand_number, App.match_system.street_name()], Rect2(270, 27, 610, 32), 19, PokerUI.GOLD)
 	var history_width := 178 if _compact_layout() else 214
 	var history_rect := Rect2(size.x - history_width - 28, 18, history_width, 52 if _compact_layout() else 48)
@@ -161,7 +162,7 @@ func _draw_actions(state: TableState, legal: Dictionary) -> void:
 	error_label = PokerUI.label(bar, "", Rect2(650, 7, 690, 27), 16, PokerUI.GOLD)
 	var row_y := 52 if _compact_layout() else 48
 	var button_h := 54 if _compact_layout() else 50
-	var fold := PokerUI.button(bar, "棄牌", Rect2(20, row_y, 145, button_h), func(): _act("fold"))
+	var fold := PokerUI.danger_button(bar, "棄牌", Rect2(20, row_y, 145, button_h), func(): _act("fold"))
 	fold.name = "Fold"
 	fold.disabled = not legal.active
 	var call := PokerUI.button(bar, "過牌" if legal.check else "跟注 %s" % StakeFormat.bb(int(legal.call)), Rect2(180, row_y, 203, button_h), func(): _act("check" if legal.check else "call"))
@@ -186,25 +187,33 @@ func _draw_actions(state: TableState, legal: Dictionary) -> void:
 	var shortcut_button := PokerUI.button(bar, "快捷 +", Rect2(760, row_y, 104, button_h), _toggle_raise_shortcuts)
 	shortcut_button.name = "RaiseShortcuts"
 	shortcut_button.disabled = not legal.can_raise
-	var raise_button := PokerUI.button(bar, "加注", Rect2(878, row_y, 178, button_h), _raise)
+	var raise_button := PokerUI.accent_button(bar, "加注", Rect2(878, row_y, 178, button_h), _raise)
 	raise_button.name = "Raise"
 	raise_button.disabled = not legal.can_raise
-	var all_in := PokerUI.button(bar, "全下", Rect2(1072, row_y, 276, button_h), func(): _act("all_in"))
+	var all_in := PokerUI.accent_button(bar, "全下", Rect2(1072, row_y, 276, button_h), func(): _act("all_in"))
 	all_in.name = "AllIn"
 	all_in.disabled = not legal.all_in
 	if raise_shortcuts_open and legal.can_raise:
 		_draw_raise_shortcuts(bar)
 
 func _draw_raise_shortcuts(bar: Panel) -> void:
-	var quick := PokerUI.panel(bar, Rect2(314, -118, 1022, 94), Color("102025"), PokerUI.GOLD)
-	PokerUI.label(quick, "快速調整", Rect2(18, 12, 180, 28), 18, PokerUI.GOLD)
-	PokerUI.button(quick, "+1 BB", Rect2(18, 46, 126, 36), func(): _adjust_raise_increment(100))
-	PokerUI.button(quick, "+10 BB", Rect2(156, 46, 126, 36), func(): _adjust_raise_increment(1000))
-	PokerUI.button(quick, "+100 BB", Rect2(294, 46, 140, 36), func(): _adjust_raise_increment(10000))
-	PokerUI.button(quick, "-1 BB", Rect2(456, 46, 126, 36), func(): _adjust_raise_increment(-100))
-	PokerUI.button(quick, "-10 BB", Rect2(594, 46, 126, 36), func(): _adjust_raise_increment(-1000))
-	PokerUI.button(quick, "-100 BB", Rect2(732, 46, 140, 36), func(): _adjust_raise_increment(-10000))
-	PokerUI.button(quick, "收起", Rect2(884, 46, 120, 36), _toggle_raise_shortcuts)
+	# Keep this popup inside the action bar's horizontal bounds at every viewport width.
+	var quick_width := bar.size.x - 40.0
+	var quick := PokerUI.panel(bar, Rect2(20, -128, quick_width, 104), Color("102025"), PokerUI.GOLD)
+	PokerUI.label(quick, "快速調整", Rect2(18, 10, quick_width - 36, 26), 16, PokerUI.GOLD)
+	var labels := ["+1 BB", "+10 BB", "+100 BB", "-1 BB", "-10 BB", "-100 BB", "收起"]
+	var adjustments := [100, 1000, 10000, -100, -1000, -10000]
+	var gap := 10.0
+	var button_width := (quick_width - 36.0 - gap * 6.0) / 7.0
+	for index in range(labels.size()):
+		var callback: Callable
+		if index == labels.size() - 1:
+			callback = _toggle_raise_shortcuts
+		else:
+			var adjustment: int = int(adjustments[index])
+			callback = func(): _adjust_raise_increment(adjustment)
+		var button := PokerUI.button(quick, labels[index], Rect2(18 + index * (button_width + gap), 44, button_width, 44), callback)
+		button.add_theme_font_size_override("font_size", PokerUI.scaled_font_size(quick, 15))
 
 func _on_resized() -> void:
 	if resize_refresh_queued or not content:
