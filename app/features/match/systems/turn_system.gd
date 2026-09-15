@@ -165,6 +165,7 @@ func advance_street() -> void:
 func finish_hand(showdown: bool) -> void:
 	state.actor = -1
 	state.hand_over = true
+	event_occurred.emit("hand_finished", {"hand": state.hand_number, "showdown": showdown})
 	var scores: Dictionary = {}
 	var descriptions: Array[String] = []
 	if showdown:

@@ -24,6 +24,7 @@ config/icon="res://assets/branding/puker-app-icon.png"
 [autoload]
 
 App="*res://app/app_architecture.gd"
+Analytics="*res://app/features/analytics/analytics.gd"
 
 [display]
 
@@ -32,6 +33,7 @@ window/size/viewport_height=900
 window/size/window_width_override=1280
 window/size/window_height_override=800
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [rendering]
 

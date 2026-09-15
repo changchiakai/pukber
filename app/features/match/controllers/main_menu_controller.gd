@@ -56,7 +56,7 @@ func _ready() -> void:
 	short_deck.size = Vector2(475, 34)
 	short_deck.button_pressed = App.settings.short_deck
 	setup.add_child(short_deck)
-	short_deck.toggled.connect(func(_enabled: bool): _selection_changed(0))
+	short_deck.toggled.connect(_on_short_deck_toggled)
 	deck_hint = PokerUI.label(setup, "", Rect2(34, 488, 475, 86), 15, PokerUI.MUTED)
 	deck_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_selection_changed(count.selected)
@@ -79,6 +79,10 @@ func _start() -> void:
 	App.settings.initial_chips = INITIAL_CHIP_OPTIONS[chips.selected]
 	App.settings.short_deck = short_deck.button_pressed
 	App.start_match()
+
+func _on_short_deck_toggled(enabled: bool) -> void:
+	Analytics.track("short_deck_toggled", {"enabled": enabled})
+	_selection_changed(0)
 
 func _format_chips(amount: int) -> String:
 	return StakeFormat.bb(amount)
