@@ -244,7 +244,8 @@ static func build_speech(profile: AIProfile, action: String, strong: bool, bluff
 	return speech
 
 static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator) -> float:
-	var unseen := PokerDeck.new(observation.deck_count).cards
+	var short_deck: bool = bool(observation.get("short_deck", false))
+	var unseen := PokerDeck.new(observation.deck_count, short_deck).cards
 	var known: Dictionary = {}
 	for card in observation.hole + observation.board:
 		known[card.identity()] = true
@@ -263,7 +264,7 @@ static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator)
 			pool[other] = temp
 		var missing: int = 5 - observation.board.size()
 		var board: Array = observation.board + pool.slice(0, missing)
-		var hero: int = HandEvaluator.evaluate(observation.hole + board).score
+		var hero: int = HandEvaluator.evaluate(observation.hole + board, short_deck).score
 		var ties := 1
 		var lost := false
 		var weight := 1.0
@@ -271,7 +272,7 @@ static func estimate_equity(observation: Dictionary, rng: RandomNumberGenerator)
 			var start := missing + opponent * 2
 			var candidate := pool.slice(start, start + 2)
 			weight *= range_weight(candidate, observation.board, observation.opponents[opponent], observation)
-			var score: int = HandEvaluator.evaluate(candidate + board).score
+			var score: int = HandEvaluator.evaluate(candidate + board, short_deck).score
 			if score > hero:
 				lost = true
 			if score == hero:
@@ -486,9 +487,9 @@ static func hand_features(observation: Dictionary) -> Dictionary:
 	var category := 0
 	var board_category := 0
 	if board.size() >= 3:
-		category = int(HandEvaluator.evaluate(hole + board).category)
+		category = int(HandEvaluator.evaluate(hole + board, bool(observation.get("short_deck", false))).category)
 	if board.size() == 5:
-		board_category = int(HandEvaluator.evaluate(board).category)
+		board_category = int(HandEvaluator.evaluate(board, bool(observation.get("short_deck", false))).category)
 	var personal_pair: bool = hole[0].rank == hole[1].rank
 	for card in hole:
 		for public_card in board:
@@ -800,7 +801,7 @@ static func range_weight(hole: Array, board: Array, opponent: Dictionary, observ
 		var weak_raise_weight := lerpf(0.50, 0.95, pressure_read)
 		weight *= 1.0 if quality >= 0.72 else weak_raise_weight
 	if board.size() >= 3 and bool(opponent.get("street_aggressive", raised)):
-		var category := int(HandEvaluator.evaluate(hole + board).category)
+		var category := int(HandEvaluator.evaluate(hole + board, bool(observation.get("short_deck", false))).category)
 		var candidate_features := hand_features({"hole": hole, "board": board,
 			"deck_count": observation.get("deck_count", 1)})
 		# Keep plausible draws in an aggressor's range, rather than assuming made hands.

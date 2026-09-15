@@ -22,7 +22,7 @@ static func execute(state: TableState, seat: int) -> Dictionary:
 	var relative_street := _relative_street_position(acting_seats, state.dealer, seat)
 	return {"hole": copy_cards(player.hole), "board": copy_cards(state.board),
 		"opponents": opponents, "pot": state.pot_total(), "chips": player.chips,
-		"bet": player.street_bet, "deck_count": state.settings.deck_count(),
+		"bet": player.street_bet, "deck_count": state.settings.deck_count(), "short_deck": state.settings.short_deck,
 		"big_blind": state.settings.big_blind, "legal": BettingSystem.legal(state, seat),
 		"history": state.history.duplicate(), "samples": state.settings.simulation_samples,
 		"street": state.street, "player_count": contenders.size(), "live_count": live_seats.size(),

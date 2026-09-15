@@ -50,7 +50,8 @@ func redraw() -> void:
 	var board_width := 56.0 * board_scale + 64.0 * board_scale * 4.0
 	PokerUI.label(content, "德州練習桌", Rect2(32, 17, 300, 49), 30)
 	PokerUI.label(content, "NO LIMIT  ·  OFFLINE TABLE", Rect2(34, 58, 360, 24), 12, PokerUI.MUTED)
-	PokerUI.label(content, "第 %02d 手   /   %s   /   單副牌 52 張" % [state.hand_number, App.match_system.street_name()], Rect2(270, 27, 610, 32), 19, PokerUI.GOLD)
+	var deck_label := "短牌 36 張" if state.settings.short_deck else "標準牌 52 張"
+	PokerUI.label(content, "第 %02d 手   /   %s   /   %s" % [state.hand_number, App.match_system.street_name(), deck_label], Rect2(270, 27, 610, 32), 19, PokerUI.GOLD)
 	var history_width := 178 if _compact_layout() else 214
 	var history_rect := Rect2(size.x - history_width - 28, 18, history_width, 52 if _compact_layout() else 48)
 	PokerUI.button(content, _history_button_text(), history_rect, _toggle_history)
@@ -70,10 +71,6 @@ func redraw() -> void:
 	var pots := PokerUI.label(content, " · ".join(pot_text), Rect2(center_x - 310, 444, 620, 72), 16, PokerUI.MUTED)
 	pots.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	pots.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var status := "本手已結算" if state.hand_over else ("輪到你了" if state.actor == 0 else "%s 思考中…" % state.players[state.actor].display_name)
-	var turn_label := PokerUI.label(content, status, Rect2(center_x - 280, 522, 560, 48), 22, PokerUI.GOLD)
-	turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	turn_label.visible = not state.hand_over
 	_draw_history(state)
 	_draw_actions(state, view.legal)
 	if state.hand_over:
@@ -90,7 +87,12 @@ func _draw_seat(seat: Dictionary, position_value: Vector2, actor: int) -> void:
 	var seat_size := _seat_size()
 	var panel := PokerUI.panel(content, Rect2(position_value, seat_size), PokerUI.PANEL, PokerUI.GOLD if actor == seat.seat else Color("365049"))
 	panel.name = "Seat%d" % seat.seat
-	PokerUI.label(panel, seat.name + (" · 已離桌" if seat.eliminated else ""), Rect2(14, 8, seat_size.x - 28, 34), 21, PokerUI.MUTED if seat.eliminated else PokerUI.TEXT)
+	var is_human_turn: bool = int(seat.seat) == 0 and actor == 0
+	var name_width := seat_size.x - 28.0 if not is_human_turn else seat_size.x - 132.0
+	PokerUI.label(panel, seat.name + (" · 已離桌" if seat.eliminated else ""), Rect2(14, 8, name_width, 34), 21, PokerUI.MUTED if seat.eliminated else PokerUI.TEXT)
+	if is_human_turn:
+		var turn_badge := PokerUI.label(panel, "●  輪到你了", Rect2(seat_size.x - 122, 11, 108, 28), 13, Color("63ddb0"))
+		turn_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	PokerUI.label(panel, StakeFormat.bb(int(seat.chips)), Rect2(14, 42, 134, 30), 19, PokerUI.GOLD)
 	if not seat.eliminated or not seat.cards.is_empty():
 		PokerUI.cards(panel, seat.cards, Vector2(14, 82), 2, _seat_card_scale())

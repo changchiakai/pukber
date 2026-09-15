@@ -54,7 +54,7 @@ func begin_hand(rotate: bool = true) -> void:
 	state.acted_at.clear()
 	state.current_bet = state.settings.big_blind
 	state.min_raise = state.settings.big_blind
-	state.deck = PokerDeck.new(state.settings.deck_count())
+	state.deck = PokerDeck.new(state.settings.deck_count(), state.settings.short_deck)
 	state.deck.shuffle_with(rng)
 	for player in state.players:
 		player.reset_hand()
@@ -73,7 +73,7 @@ func begin_hand(rotate: bool = true) -> void:
 		for _index in range(live.size()):
 			state.players[seat].hole.append(state.deck.draw())
 			seat = next_live(seat)
-	state.record("開始 · 莊家 %s · 單副牌 52 張" % state.players[state.dealer].display_name)
+	state.record("開始 · 莊家 %s · %s %d 張" % [state.players[state.dealer].display_name, "短牌德州" if state.settings.short_deck else "標準德州", state.settings.cards_per_deck()])
 	event_occurred.emit("hand_started", {"hand": state.hand_number})
 	event_occurred.emit("cards_dealt", {})
 	progress(state.big_blind_seat)
@@ -173,7 +173,7 @@ func finish_hand(showdown: bool) -> void:
 		var player: PlayerState = state.players[seat]
 		if showdown:
 			player.revealed = true
-			var hand := HandEvaluator.evaluate(player.hole + state.board)
+			var hand := HandEvaluator.evaluate(player.hole + state.board, state.settings.short_deck)
 			scores[seat] = hand.score
 			var text: String = player.display_name + "：" + cards_text(player.hole) + " · " + hand.description
 			state.record("攤牌 · " + text)
@@ -190,7 +190,7 @@ func finish_hand(showdown: bool) -> void:
 		var player: PlayerState = state.players[award.seat]
 		var message := "%s %s %s" % [player.display_name, "取回未跟注籌碼" if award.refund else "贏得", StakeFormat.bb(int(award.amount))]
 		if showdown and not award.refund:
-			message += " · " + HandEvaluator.evaluate(player.hole + state.board).description
+			message += " · " + HandEvaluator.evaluate(player.hole + state.board, state.settings.short_deck).description
 		descriptions.append(message)
 		state.record(message)
 		event_occurred.emit("pot_awarded", award)

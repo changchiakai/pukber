@@ -3,10 +3,10 @@ extends RefCounted
 
 var cards: Array = []
 
-func _init(copies: int = 1) -> void:
+func _init(copies: int = 1, short_deck: bool = false) -> void:
 	for copy in range(copies):
 		for suit in range(4):
-			for rank in range(2, 15):
+			for rank in range(6 if short_deck else 2, 15):
 				cards.append(PokerCard.new(rank, suit, copy))
 
 func shuffle_with(rng: RandomNumberGenerator) -> void:

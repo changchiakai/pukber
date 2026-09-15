@@ -96,6 +96,11 @@ func test_deck() -> void:
 		for card in deck.cards:
 			identities[card.identity()] = true
 		check(identities.size() == deck.cards.size(), "physical cards unique")
+	var short_settings := MatchSettings.new()
+	short_settings.short_deck = true
+	var short_deck := PokerDeck.new(short_settings.deck_count(), short_settings.short_deck)
+	check(short_deck.cards.size() == 36, "short deck has 36 cards")
+	check(short_deck.cards.all(func(card): return card.rank >= 6), "short deck removes ranks two through five")
 
 func test_evaluator() -> void:
 	var fixtures: Array = [
@@ -119,6 +124,10 @@ func test_evaluator() -> void:
 	check(HandEvaluator.evaluate(cards([14, 13, 12, 11, 10])).category == 4, "broadway straight without flush")
 	check(HandEvaluator.evaluate(cards([14, 14, 8, 8, 13])).score > HandEvaluator.evaluate(cards([14, 14, 8, 8, 12])).score, "kicker comparison")
 	check(HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [0, 1, 2, 3, 0])).score == HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [1, 1, 2, 3, 0])).score, "suits never break rank ties")
+	check(HandEvaluator.evaluate(cards([14, 6, 7, 8, 9]), true).kickers == [9], "short deck ace-six straight")
+	var short_flush := HandEvaluator.evaluate(cards([14, 13, 11, 9, 7], [0, 0, 0, 0, 0]), true)
+	var short_full_house := HandEvaluator.evaluate(cards([14, 14, 14, 13, 13]), true)
+	check(short_flush.category == 5 and short_full_house.category == 6 and short_flush.score > short_full_house.score, "short deck flush beats full house")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 842
 	for iteration in range(250):
@@ -210,6 +219,12 @@ func test_flow() -> void:
 		actions += 1
 	check(state.hand_over and state.board.size() == 5, "all four streets showdown")
 	check(state.players[0].revealed and state.players[1].revealed, "showdown reveals contenders")
+	var short_settings := MatchSettings.new()
+	short_settings.ai_count = 1
+	short_settings.short_deck = true
+	var short_game := StartMatchCommand.execute(short_settings, 19)
+	check(short_game.state.deck.cards.size() == 32, "short deck deals four cards from a 36-card deck")
+	check(short_game.state.deck.cards.all(func(card): return card.rank >= 6), "short deck game never deals removed ranks")
 	var previous_dealer := state.dealer
 	game.begin_hand()
 	check(state.dealer != previous_dealer and state.hand_number == 2, "dealer rotates")
